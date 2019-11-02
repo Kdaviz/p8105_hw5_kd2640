@@ -92,19 +92,63 @@ This zip file contains data from a longitudinal study that included a control ar
 
 Create a tidy dataframe containing data from all participants, including the subject ID, arm, and observations over time:
 
+
 * Start with a dataframe containing all file names; `the list.files` function will help
+
+```{r}
+data_files = list.files("./data")
+
+```
+
 * Iterate over file names and read in data for each subject using purrr::map and saving the result as a new variable in the dataframe
+
+```{r, results='hide'}
+read_csv_files = function(x) {
+  study_data = 
+    read_csv(file = str_c("./data/", x)) %>% 
+    mutate(file = x)
+}
+
+study_data = 
+  map_df(data_files, read_csv_files)
+```
+
 * Tidy the result; manipulate file names to include control arm and subject ID, make sure weekly observations are “tidy”, and do any other tidying that’s necessary
 
 ```{r}
-
+study_data = 
+study_data %>% 
+  pivot_longer(
+    week_1:week_8,
+    names_to = "week",
+    values_to = "observation"
+  ) %>% 
+    separate(file, into = c("arm", "subject_ID"), sep = "_") %>% 
+    mutate(week = str_replace(week, "week_", ""),
+         subject_ID = str_replace(subject_ID,".csv",""),
+         arm = recode(arm, "con" = "control", 
+                        "exp" = "experimental")) %>% 
+  select(subject_ID, week, observation, arm)
 ```
 
 Make a spaghetti plot showing observations on each subject over time, and comment on differences between groups.
 
 ```{r}
-
+study_data %>% 
+  ggplot(aes(x = week, y = observation, group = subject_ID,
+             color = subject_ID)) +
+  geom_line() +
+  facet_grid(~arm) +
+  labs(
+    title = "Observations on each Subject Over Time",
+    x = "Week", 
+    y = "Observations"
+  )
 ```
+
+The observations of subjects in the control arm stays constant over the 8 weeks versus the observations of subjects in the experimental arm increases over the 8 weeks study period. 
+
+
 
 # Problem 3
 When designing an experiment or analysis, a common question is whether it is likely that a true effect will be detected – put differently, whether a false null hypothesis will be rejected. The probability that a false null hypothesis is rejected is referred to as power, and it depends on several factors, including: the sample size; the effect size; and the error variance. In this problem, you will conduct a simulation to explore power in a simple linear regression.
@@ -128,7 +172,24 @@ Repeat the above for β1={1,2,3,4,5,6}, and complete the following:
 
 
 ```{r}
-
+sim_regression = function(n = 30,x, beta0 = 2, beta1 = 0) {
+  
+  sim_data = tibble(
+    x = rnorm(30, x, sd = 50),
+    y = beta0 + beta1 * x + rnorm(30, x, 50)
+  )
+  
+  ls_fit = lm(y ~ x, data = sim_data)
+  
+  tibble(
+    beta0_hat = coef(ls_fit)[1],
+    beta1_hat = coef(ls_fit)[2]
+  )
+}
+sim_results = 
+  rerun(10000, sim_regression(30, 2, 3)) %>% 
+  bind_rows() 
+#broom::tidy()
 ```
 
 
