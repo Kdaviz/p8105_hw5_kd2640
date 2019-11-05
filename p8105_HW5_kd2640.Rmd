@@ -176,20 +176,21 @@ sim_regression = function(n = 30,x, beta0 = 2, beta1 = 0) {
   
   sim_data = tibble(
     x = rnorm(30, x, sd = 50),
-    y = beta0 + beta1 * x + rnorm(30, x, 50)
+    y = beta0 + beta1 * x + rnorm(30, x, sqrt(50))
   )
   
-  ls_fit = lm(y ~ x, data = sim_data)
+  ls_fit = lm(y ~ x, data = sim_data) %>% 
+  broom::tidy()
   
   tibble(
-    beta0_hat = coef(ls_fit)[1],
-    beta1_hat = coef(ls_fit)[2]
+    beta1_hat = pull(ls_fit, estimate)[2],
+    p_value = pull(ls_fit, p.value)[2]
   )
 }
 sim_results = 
-  rerun(10000, sim_regression(30, 2, 3)) %>% 
+  rerun(10000, sim_regression(30, 2, sqrt(50))) %>% 
   bind_rows() 
-#broom::tidy()
+
 ```
 
 
