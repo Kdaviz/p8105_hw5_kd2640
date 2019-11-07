@@ -1,5 +1,5 @@
 ---
-title: "Homework 5"
+title: "Homework 5 Iteration"
 author: "Keyanna Davis"
 date: "11/1/2019"
 output: github_document
@@ -26,7 +26,7 @@ scale_fill_discrete = scale_fill_viridis_d
 theme_set(theme_minimal() + theme(legend.position = "bottom"))
 ```
 
-#Problem 0 
+## Problem 0 
 
 This “problem” focuses on structure of your submission, especially the use git 
 and GitHub for reproducibility, R Projects to organize your work, R Markdown 
@@ -57,7 +57,7 @@ clarity of code will be assessed in Problems 1+ using the homework style rubric.
 This homework includes figures; the readability of your embedded plots (e.g. 
 font sizes, axis labels, titles) will be assessed in Problems 1+.
 
-#Problem 1
+## Problem 1
 
 The code chunk below loads the `iris` dataset from the `tidyverse` package and introduces some missing values in each column. The purpose of this problem is to fill in those missing values.
 
@@ -84,9 +84,11 @@ if (is.numeric(x)) {
 }
 }
 iris_wo_missing = map_df(iris_with_missing, replace_na_iris)
+
+
 ```
 
-# Problem 2
+## Problem 2
 
 This zip file contains data from a longitudinal study that included a control arm and an experimental arm. Data for each participant is included in a separate file, and file names include the subject ID and arm.
 
@@ -150,7 +152,7 @@ The observations of subjects in the control arm stays constant over the 8 weeks 
 
 
 
-# Problem 3
+## Problem 3
 When designing an experiment or analysis, a common question is whether it is likely that a true effect will be detected – put differently, whether a false null hypothesis will be rejected. The probability that a false null hypothesis is rejected is referred to as power, and it depends on several factors, including: the sample size; the effect size; and the error variance. In this problem, you will conduct a simulation to explore power in a simple linear regression.
 
 First set the following design elements:
@@ -163,34 +165,100 @@ Set β1=0. Generate 10000 datasets from the model
               yi=β0+β1xi1+ϵi
 with ϵi∼N[0,σ2]. For each dataset, save β̂1 and the p-value arising from a test of H:β1=0 using α=0.05. Hint: to obtain the estimate and p-value, use broom::tidy to clean the output of lm.
 
+
+```{r}
+sim_regression = function(n = 30, beta0 = 2, beta1 = 0) {
+  
+  sim_data = tibble(
+    x = rnorm(30, mean= 0, sd = 1),
+    y = beta0 + beta1 * x + rnorm(30, 0, sqrt(50))
+  )
+  
+  ls_fit = lm(y ~ x, data = sim_data) 
+  broom::tidy(ls_fit)
+}
+
+temp_result =
+  rerun(10000, sim_regression(30, 2, 0)) %>% 
+  bind_rows() %>% 
+  janitor::clean_names() %>% 
+   filter(term == "x") %>% 
+  select(estimate, p_value)
+  
+```
+
 Repeat the above for β1={1,2,3,4,5,6}, and complete the following:
 
-* Make a plot showing the proportion of times the null was rejected (the power of the test) on the y axis and the true value of β2
+```{r}
+sim_results = tibble(
+  beta = c(1:6)
+) %>% 
+  mutate(
+    output_list = map(.x = beta, ~rerun(10000, 
+                        sim_regression(n = 30, beta1 = .x))), 
+    output_df = map(output_list, bind_rows)
+  ) %>% 
+  select(-output_list) %>% 
+  unnest(output_df) %>% 
+  janitor::clean_names() %>% 
+  filter(term == "x") %>% 
+  select(beta, estimate, p_value)
+```
+
+* Make a plot showing the proportion of times the null was rejected (the power of the test) on the y axis and the true value of β1
  on the x axis. Describe the association between effect size and power.
+ 
+```{r}
+sign_results = 
+sim_results %>% 
+ group_by(beta) %>% 
+  count(p_value < 0.05) %>% 
+ janitor::clean_names() %>% 
+  mutate( 
+    sign_pvalue = p_value_0_05,
+    total = n
+  ) %>% 
+  select(beta, sign_pvalue, total) %>% 
+  mutate(prop = total/sum(total)) %>% 
+  filter(sign_pvalue == "TRUE")
+
+sign_results %>% 
+  ggplot(aes(x = beta, y = prop)) + 
+  geom_point(size =3) +
+  geom_line()
+
+```
+
+The above graph shows that as the effect size increases the power increases as well when sample size remain the same. 
+
 * Make a plot showing the average estimate of β̂1 on the y axis and the true value of β1 on the x axis. Make a second plot (or overlay on the first) the average estimate of β̂1 only in samples for which the null was rejected on the y axis and the true value of β1 on the x axis. Is the sample average of β̂1 across tests for which the null is rejected approximately equal to the true value of β1
 ? Why or why not?
 
-
 ```{r}
-sim_regression = function(n = 30,x, beta0 = 2, beta1 = 0) {
-  
-  sim_data = tibble(
-    x = rnorm(30, x, sd = 50),
-    y = beta0 + beta1 * x + rnorm(30, x, sqrt(50))
-  )
-  
-  ls_fit = lm(y ~ x, data = sim_data) %>% 
-  broom::tidy()
-  
-  tibble(
-    beta1_hat = pull(ls_fit, estimate)[2],
-    p_value = pull(ls_fit, p.value)[2]
-  )
-}
-sim_results = 
-  rerun(10000, sim_regression(30, 2, sqrt(50))) %>% 
-  bind_rows() 
+all_pvalue = 
+  sim_results %>% 
+  group_by(beta) %>% 
+  summarise(avg = mean(estimate)) 
 
+sign_pvalue = 
+  sim_results %>% 
+  filter(p_value <0.05) %>% 
+  group_by(beta) %>% 
+  summarise(avg_sig = mean(estimate))
+
+mean_estimate_df = inner_join(all_pvalue, sign_pvalue, by= c("beta"))
+  
+mean_estimate_df %>% 
+  mutate(group = rep("Average Estimate Null Rejected"),
+         type = rep("Average Estimate")) %>% 
+  ggplot(aes(x = beta))+
+  geom_line(aes(y = avg, color = type), alpha = .5, linetype="solid")+
+  geom_line(aes(y = avg_sig, color = group ), alpha = .9, linetype = "longdash") +
+  labs(title = "Samples Average Estimates of B1 by the True Values of B1",
+       y = "Average Estimates",
+       x = "True Betas")
 ```
+
+The above graph shows the average estimate of β1 which is the solid purple line, and the average estimate of β1 which the null is rejected which is the yellow dash line. The average estimate of β1 is equal to the true value of β1. The average estimated values of β1 where the null is rejected are not equal to the true value of β1 for all betas but when the effect size increases it is approximately equal to the true values of β1. When the effect size is small, the power is over estimated, in this case where the null is rejected either over or underestimate the true value of the effect size. As the effect size increases, the rejected null effect size estimates approach the true effect size value. The rejected null cases tend to more closely approximate the effect size when the effect size is large is because statistical power and p value calculations are dependent on both the sample size and the effect size. A larger effect size is more easily detected when the sample size is the same. 
 
 
