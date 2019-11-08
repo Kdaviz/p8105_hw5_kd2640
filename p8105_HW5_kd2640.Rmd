@@ -225,7 +225,7 @@ sim_results %>%
 sign_results %>% 
   ggplot(aes(x = beta, y = prop)) + 
   geom_point(size =3) +
-  geom_line()
+  geom_line(color = "red")
 
 ```
 
